@@ -18,4 +18,5 @@ shows = {
     'jump': jump.Jump,
     'audio_spectrum': audio.AudioSpectrum,
     'ukraine': ukraine.Ukraine,
+    'italy': italy.Italy,
 }
