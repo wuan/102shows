@@ -5,7 +5,9 @@
 """This module contains the drivers for the LED strips"""
 
 import logging
+import time
 from abc import ABCMeta, abstractmethod
+from collections.abc import Callable
 from multiprocessing import Array as SyncedArray
 from multiprocessing import Value as SyncedValue
 
@@ -248,15 +250,19 @@ class LEDStrip(metaclass=ABCMeta):
 
         :param brightness: the global brightness (``0.0 - 1.0``) multiplicator to be set
         """
-        if brightness < 0.0:
-            self._global_brightness = 0.0
-        elif brightness > self.__max_global_brightness:
-            self._global_brightness = self.__max_global_brightness
-        else:
-            self._global_brightness = brightness
+        if self.__frozen:  # skip if show is frozen
+            return
 
+        brightness = coerce(brightness, 0.0, 1.0)
+
+        transition(self._global_brightness, brightness,0.05, self.update_leds_brightness)
+
+    def update_leds_brightness(self, brightness: float):
+        self._global_brightness = brightness
         for led_num in range(self.num_leds):
             self.on_brightness_change(led_num)
+        self.show()
+        time.sleep(0.1)
 
     def clear_buffer(self) -> None:
         """Resets all pixels in the color buffer to ``(0,0,0)``."""
@@ -303,3 +309,28 @@ class LEDStrip(metaclass=ABCMeta):
             # brightness
             self.brightness_buffer[led_num] = self.synced_brightness_buffer[led_num]
             self.on_brightness_change(led_num)
+
+
+def coerce(value: float, minimum: float, maximum: float) -> float:
+    return min(max(value, 0.0), 1.0)
+
+
+def transition(current: float, target: float, delta: float, update: Callable[[float], None]):
+    """Transition between current and target value in steps.
+
+    :param current: Starting value
+    :param target: Target value to reach
+    :param update: Callback function to update value
+    :param delta: Step size for each update
+    """
+
+    delta = abs(delta) * (1 if target > current else -1)
+
+    number_of_steps = int((target - current) // delta)
+
+    for i in range(1, number_of_steps + 1):
+        current += delta
+        update(current)
+
+    if current != target:
+        update(target)
